@@ -4,6 +4,8 @@ import matplotlib.animation as animation
 import numpy as np
 import threading
 from collections import deque
+from datetime import datetime
+import os
 
 # ========== 상수 정의 ==========
 # 물리 상수
@@ -26,7 +28,7 @@ INITIAL_SOLAR_LUMINOSITY = 550     # 초기 태양 광도
 SOLAR_LUMINOSITY_INCREASE_RATE = 5.5  # 시간당 태양 광도 증가율
 
 # 시뮬레이션 시간
-SIMULATION_TIME_STEPS = 200        # 총 시뮬레이션 시간 스텝
+SIMULATION_TIME_STEPS = None          # 무한 시뮬레이션 (None = 무한)
 
 # Pygame 시각화 설정
 SCREEN_WIDTH = 800                 # 화면 너비
@@ -93,8 +95,7 @@ class DaisyworldSimulator:
     
     def step(self):
         """시뮬레이션 한 스텝 실행"""
-        if self.current_time >= SIMULATION_TIME_STEPS:
-            return False
+        # 무한 시뮬레이션 (시간 제한 없음)
         
         # 태양 광도 계산
         self.solar_luminosity = INITIAL_SOLAR_LUMINOSITY + (SOLAR_LUMINOSITY_INCREASE_RATE * self.current_time)
@@ -158,6 +159,54 @@ class DaisyworldSimulator:
         colors = [COLOR_BLACK_DAISY] * num_black + [COLOR_WHITE_DAISY] * num_white + [COLOR_BARE_GROUND] * num_bare
         np.random.shuffle(colors)
         return colors
+    
+    def save_graphs(self, output_dir='results'):
+        """시뮬레이션 결과 그래프를 파일로 저장"""
+        # 결과 디렉토리 생성
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # 타임스탬프로 파일명 생성
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Figure 생성
+        fig, (ax_population, ax_temperature) = plt.subplots(2, 1, figsize=(12, 10))
+        fig.suptitle(f'Daisyworld Simulation Results\n{timestamp}', fontsize=16, fontweight='bold')
+        
+        # 개체수 그래프
+        ax_population.plot(self.history_time, self.history_black_daisy, 'k-', linewidth=2, label='Black Daisy')
+        ax_population.plot(self.history_time, self.history_white_daisy, color='lightblue', linewidth=2, label='White Daisy')
+        ax_population.set_xlabel('Time (steps)', fontsize=12)
+        ax_population.set_ylabel('Population Area', fontsize=12)
+        ax_population.set_title('Daisy Population Over Time', fontsize=13, fontweight='bold')
+        ax_population.grid(True, alpha=0.3)
+        ax_population.legend(loc='best')
+        
+        # 온도 그래프
+        ax_temperature.plot(self.history_time, self.history_temperature, 'r-', linewidth=2, label='Planet Temp')
+        ax_temperature.axhline(y=OPTIMAL_TEMPERATURE, color='green', linestyle='--', alpha=0.5, linewidth=2, label='Optimal Temp')
+        ax_temperature.set_xlabel('Time (steps)', fontsize=12)
+        ax_temperature.set_ylabel('Temperature (K)', fontsize=12)
+        ax_temperature.set_title('Planetary Temperature Over Time', fontsize=13, fontweight='bold')
+        ax_temperature.grid(True, alpha=0.3)
+        ax_temperature.legend(loc='best')
+        
+        plt.tight_layout()
+        
+        # 파일 저장
+        filename = os.path.join(output_dir, f'daisyworld_simulation_{timestamp}.png')
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"\n{'='*60}")
+        print(f"Graph saved: {filename}")
+        print(f"Total simulation steps: {self.current_time}")
+        print(f"Final temperature: {self.temperature_planet:.2f} K")
+        print(f"Final black daisy area: {self.area_black_daisy:.4f}")
+        print(f"Final white daisy area: {self.area_white_daisy:.4f}")
+        print(f"{'='*60}\n")
+        
+        return filename
 
 
 # ========== Pygame 시각화 ==========
@@ -173,7 +222,7 @@ def run_pygame_visualization(simulator):
     font_small = pygame.font.Font(None, 32)
     
     running = True
-    while running and simulator.current_time < SIMULATION_TIME_STEPS:
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -197,7 +246,7 @@ def run_pygame_visualization(simulator):
         screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 30))
         
         info_lines = [
-            f'Time: {simulator.current_time} / {SIMULATION_TIME_STEPS}',
+            f'Time: {simulator.current_time}',
             f'Temperature: {simulator.temperature_planet:.2f} K',
             f'Black Daisy: {simulator.area_black_daisy:.3f}',
             f'White Daisy: {simulator.area_white_daisy:.3f}',
@@ -223,7 +272,7 @@ def run_matplotlib_graphs(simulator):
     fig.suptitle('Daisyworld Real-time Statistics', fontsize=16, fontweight='bold')
     
     # 개체수 그래프 설정
-    ax_population.set_xlim(0, SIMULATION_TIME_STEPS)
+    ax_population.set_xlim(0, 200)
     ax_population.set_ylim(0, 1)
     ax_population.set_xlabel('Time (steps)', fontsize=11)
     ax_population.set_ylabel('Population Area', fontsize=11)
@@ -234,7 +283,7 @@ def run_matplotlib_graphs(simulator):
     ax_population.legend(loc='upper right')
     
     # 온도 그래프 설정
-    ax_temperature.set_xlim(0, SIMULATION_TIME_STEPS)
+    ax_temperature.set_xlim(0, 200)
     ax_temperature.set_ylim(250, 350)
     ax_temperature.set_xlabel('Time (steps)', fontsize=11)
     ax_temperature.set_ylabel('Temperature (K)', fontsize=11)
@@ -256,6 +305,14 @@ def run_matplotlib_graphs(simulator):
     def animate(frame):
         """애니메이션 업데이트"""
         if len(simulator.history_time) > 0:
+            # X축 범위 동적 조정
+            current_max = max(simulator.history_time) if simulator.history_time else 200
+            if current_max > 200:
+                ax_population.set_xlim(0, current_max + 10)
+                ax_temperature.set_xlim(0, current_max + 10)
+                # X축 범위가 변경되었으므로 figure를 다시 그림
+                fig.canvas.draw_idle()
+            
             line_black.set_data(simulator.history_time, simulator.history_black_daisy)
             line_white.set_data(simulator.history_time, simulator.history_white_daisy)
             line_temp.set_data(simulator.history_time, simulator.history_temperature)
@@ -265,10 +322,9 @@ def run_matplotlib_graphs(simulator):
         fig, 
         animate, 
         init_func=init,
-        frames=SIMULATION_TIME_STEPS,
         interval=50,  # 50ms마다 업데이트
-        blit=True,
-        repeat=False
+        blit=False,  # blit=False로 변경하여 X축 업데이트 가능하게
+        cache_frame_data=False
     )
     
     plt.show()
@@ -282,6 +338,8 @@ if __name__ == "__main__":
     print("Two windows will open:")
     print("  1. Pygame window: Visual planet with daisies")
     print("  2. Matplotlib window: Real-time graphs")
+    print("\nSimulation runs indefinitely until you close the window.")
+    print("Graphs will be saved automatically when you exit.")
     print("=" * 60)
     
     # 시뮬레이터 생성
@@ -294,6 +352,9 @@ if __name__ == "__main__":
     # Pygame을 메인 스레드에서 실행
     run_pygame_visualization(simulator)
     
-    print("=" * 60)
+    # 시뮬레이션 종료 후 그래프 저장
+    print("\nSaving simulation results...")
+    saved_file = simulator.save_graphs()
+    
     print("Simulation completed!")
     print("=" * 60)
