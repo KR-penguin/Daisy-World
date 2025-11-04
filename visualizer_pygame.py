@@ -39,6 +39,11 @@ def run_pygame_visualization(simulator):
     font_large = pygame.font.Font(None, 48)
     font_small = pygame.font.Font(None, 32)
     
+    # 현재 배경색 (점진적 변화를 위한 변수)
+    current_bg_r = 255
+    current_bg_g = 255
+    current_bg_b = 255
+    
     running = True
     while running:
         for event in pygame.event.get():
@@ -48,13 +53,24 @@ def run_pygame_visualization(simulator):
         # 시뮬레이션 스텝 실행
         simulator.step()
         
-        # 낮/밤에 따라 배경색 변경
-        if simulator.is_daytime:
-            background_color = COLOR_WHITE     # 낮: 흰색
-            text_color = COLOR_BLACK           # 낮: 검은색 텍스트
+        # 태양 강도에 따라 배경색과 텍스트 색상 점진적으로 변경
+        # solar_intensity: 1.0 (낮, 흰색) → 0.0 (밤, 검은색)
+        target_bg_value = int(255 * simulator.solar_intensity)
+        
+        # 배경색을 목표값으로 부드럽게 이동 (각 RGB 채널)
+        transition_speed = 5  # 전환 속도 (값이 클수록 빠름)
+        current_bg_r += (target_bg_value - current_bg_r) * 0.1
+        current_bg_g += (target_bg_value - current_bg_g) * 0.1
+        current_bg_b += (target_bg_value - current_bg_b) * 0.1
+        
+        background_color = (int(current_bg_r), int(current_bg_g), int(current_bg_b))
+        
+        # 텍스트 색상 (배경의 반전색으로 가독성 확보)
+        text_brightness = int(current_bg_r)
+        if text_brightness > 127:
+            text_color = COLOR_BLACK  # 밝은 배경에는 검은 텍스트
         else:
-            background_color = COLOR_BLACK     # 밤: 검은색
-            text_color = COLOR_WHITE           # 밤: 흰색 텍스트
+            text_color = COLOR_WHITE  # 어두운 배경에는 흰 텍스트
         
         # 화면 그리기
         screen.fill(background_color)
@@ -74,6 +90,7 @@ def run_pygame_visualization(simulator):
         info_lines = [
             f'Time: {simulator.current_time}',
             f'Day/Night: {"DAY" if simulator.is_daytime else "NIGHT"} ({simulator.day_night_timer}/{50})',
+            f'Solar Intensity: {simulator.solar_intensity:.2f}',
             f'Temperature: {simulator.temperature_planet:.2f} K',
             f'Black Daisy: {simulator.area_black_daisy:.3f}',
             f'White Daisy: {simulator.area_white_daisy:.3f}',
@@ -87,7 +104,7 @@ def run_pygame_visualization(simulator):
             f'Emissivity: {simulator.earth_emissivity:.3f}'
         ]
         
-        y_offset = SCREEN_HEIGHT - 465
+        y_offset = SCREEN_HEIGHT - 500
         for line in info_lines:
             text = font_small.render(line, True, text_color)
             screen.blit(text, (20, y_offset))

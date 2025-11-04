@@ -50,6 +50,7 @@ H2O_GREENHOUSE_FACTOR = 0.1           # H2O는 농도가 높지만 효과는 약
 # 낮/밤 사이클 설정
 DAY_NIGHT_CYCLE_DURATION = 50         # 낮/밤 전환 주기 (스텝 단위)
 NIGHT_SOLAR_REDUCTION = 0.0           # 밤에 태양 광도 감소율 (0 = 완전 차단)
+TRANSITION_SMOOTHNESS = 0.1           # 낮/밤 전환 부드러움 (0.1 = 10스텝에 걸쳐 전환)
 
 class DaisyworldSimulator:
     """데이지 월드 시뮬레이션 클래스"""
@@ -92,6 +93,7 @@ class DaisyworldSimulator:
         # 낮/밤 사이클 변수
         self.is_daytime = True                                # 현재 낮인지 밤인지
         self.day_night_timer = 0                              # 낮/밤 전환 타이머
+        self.solar_intensity = 1.0                            # 현재 태양 강도 (0.0 ~ 1.0, 점진적 변화)
         
         # 데이터 기록용 리스트
         self.history_black_daisy = []
@@ -168,7 +170,7 @@ class DaisyworldSimulator:
     def _update_day_night_cycle(self):
         """
         낮/밤 사이클 업데이트
-        50스텝마다 낮과 밤이 전환됨
+        50스텝마다 낮과 밤이 전환되며, 태양 강도는 점진적으로 변화
         """
         self.day_night_timer += 1
         
@@ -176,19 +178,27 @@ class DaisyworldSimulator:
         if self.day_night_timer >= DAY_NIGHT_CYCLE_DURATION:
             self.is_daytime = not self.is_daytime
             self.day_night_timer = 0
+        
+        # 태양 강도 점진적 변화 (부드러운 전환)
+        if self.is_daytime:
+            # 낮이 되면 태양 강도를 서서히 증가
+            target_intensity = 1.0
+        else:
+            # 밤이 되면 태양 강도를 서서히 감소
+            target_intensity = NIGHT_SOLAR_REDUCTION
+        
+        # 현재 강도를 목표 강도로 부드럽게 이동
+        self.solar_intensity += (target_intensity - self.solar_intensity) * TRANSITION_SMOOTHNESS
     
     def _get_effective_solar_luminosity(self):
         """
         현재 낮/밤 상태에 따른 유효 태양 광도 계산
+        태양 강도가 점진적으로 변하므로 온도도 부드럽게 변화
         
         Returns:
             유효 태양 광도
         """
-        if self.is_daytime:
-            return self.solar_luminosity
-        else:
-            # 밤에는 태양 광도가 크게 감소
-            return self.solar_luminosity * NIGHT_SOLAR_REDUCTION
+        return self.solar_luminosity * self.solar_intensity
     
     def step(self):
         """시뮬레이션 한 스텝 실행"""
