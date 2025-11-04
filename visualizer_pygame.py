@@ -68,10 +68,17 @@ def run_pygame_visualization(simulator):
             f'Temperature: {simulator.temperature_planet:.2f} K',
             f'Black Daisy: {simulator.area_black_daisy:.3f}',
             f'White Daisy: {simulator.area_white_daisy:.3f}',
-            f'Solar Luminosity: {simulator.solar_luminosity:.1f}'
+            f'Solar Luminosity: {simulator.solar_luminosity:.1f}',
+            f'',  # 빈 줄
+            f'=== Greenhouse Gases ===',
+            f'CO2: {simulator.co2_concentration:.2f} ppm',
+            f'CH4: {simulator.ch4_concentration:.3f} ppm',
+            f'H2O: {simulator.h2o_concentration:.1f} ppm',
+            f'Greenhouse Effect: {simulator.greenhouse_effect:.3f}',
+            f'Emissivity: {simulator.earth_emissivity:.3f}'
         ]
         
-        y_offset = SCREEN_HEIGHT - 180
+        y_offset = SCREEN_HEIGHT - 430
         for line in info_lines:
             text = font_small.render(line, True, COLOR_TEXT)
             screen.blit(text, (20, y_offset))
