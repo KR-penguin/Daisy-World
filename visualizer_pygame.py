@@ -48,8 +48,16 @@ def run_pygame_visualization(simulator):
         # 시뮬레이션 스텝 실행
         simulator.step()
         
+        # 낮/밤에 따라 배경색 변경
+        if simulator.is_daytime:
+            background_color = COLOR_WHITE     # 낮: 흰색
+            text_color = COLOR_BLACK           # 낮: 검은색 텍스트
+        else:
+            background_color = COLOR_BLACK     # 밤: 검은색
+            text_color = COLOR_WHITE           # 밤: 흰색 텍스트
+        
         # 화면 그리기
-        screen.fill(COLOR_SPACE)
+        screen.fill(background_color)
         
         # 행성 그리기
         pygame.draw.circle(screen, COLOR_PLANET, (CENTER_X, CENTER_Y), PLANET_RADIUS_PX)
@@ -60,11 +68,12 @@ def run_pygame_visualization(simulator):
             pygame.draw.circle(screen, color, pos, 4)
         
         # 정보 텍스트 그리기
-        title_text = font_large.render('Daisyworld Planet', True, COLOR_TEXT)
+        title_text = font_large.render('Daisyworld Planet', True, text_color)
         screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 30))
         
         info_lines = [
             f'Time: {simulator.current_time}',
+            f'Day/Night: {"DAY" if simulator.is_daytime else "NIGHT"} ({simulator.day_night_timer}/{50})',
             f'Temperature: {simulator.temperature_planet:.2f} K',
             f'Black Daisy: {simulator.area_black_daisy:.3f}',
             f'White Daisy: {simulator.area_white_daisy:.3f}',
@@ -78,9 +87,9 @@ def run_pygame_visualization(simulator):
             f'Emissivity: {simulator.earth_emissivity:.3f}'
         ]
         
-        y_offset = SCREEN_HEIGHT - 430
+        y_offset = SCREEN_HEIGHT - 465
         for line in info_lines:
-            text = font_small.render(line, True, COLOR_TEXT)
+            text = font_small.render(line, True, text_color)
             screen.blit(text, (20, y_offset))
             y_offset += 35
         

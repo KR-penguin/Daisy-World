@@ -46,10 +46,10 @@ CO2_GREENHOUSE_FACTOR = 1.0           # CO2 기준 (1배)
 CH4_GREENHOUSE_FACTOR = 25.0          # CH4는 CO2 대비 25배 강력
 H2O_GREENHOUSE_FACTOR = 0.1           # H2O는 농도가 높지만 효과는 약함
 
-# 온실 기체 증가율 (시간당 ppm 증가)
-CO2_INCREASE_RATE = 0.05              # 시간당 CO2 증가
-CH4_INCREASE_RATE = 0.001             # 시간당 CH4 증가
-H2O_INCREASE_RATE = 0.5               # 시간당 H2O 증가 (온도에 따라 변동)
+
+# 낮/밤 사이클 설정
+DAY_NIGHT_CYCLE_DURATION = 50         # 낮/밤 전환 주기 (스텝 단위)
+NIGHT_SOLAR_REDUCTION = 0.0           # 밤에 태양 광도 감소율 (0 = 완전 차단)
 
 class DaisyworldSimulator:
     """데이지 월드 시뮬레이션 클래스"""
@@ -88,6 +88,10 @@ class DaisyworldSimulator:
         self.h2o_concentration = INITIAL_H2O_CONCENTRATION    # H2O 농도 (ppm)
         self.greenhouse_effect = 0.0                          # 총 온실효과
         self.earth_emissivity = BASE_EARTH_EMISSIVITY         # 현재 지구 복사 방출 효율
+        
+        # 낮/밤 사이클 변수
+        self.is_daytime = True                                # 현재 낮인지 밤인지
+        self.day_night_timer = 0                              # 낮/밤 전환 타이머
         
         # 데이터 기록용 리스트
         self.history_black_daisy = []
@@ -154,23 +158,44 @@ class DaisyworldSimulator:
         """
         시간에 따른 온실 기체 농도 업데이트
         """
-        # 기본 증가율
-        self.co2_concentration += CO2_INCREASE_RATE
-        self.ch4_concentration += CH4_INCREASE_RATE
         
-        # H2O는 온도에 따라 변동 (온도가 높을수록 증발 증가)
-        temperature_factor = (self.temperature_planet - 273.15) / 100.0  # 섭씨 온도 기준
-        h2o_adjustment = H2O_INCREASE_RATE * (1.0 + temperature_factor)
-        self.h2o_concentration += h2o_adjustment
         
         # 농도가 음수가 되지 않도록
         self.co2_concentration = max(self.co2_concentration, 0)
         self.ch4_concentration = max(self.ch4_concentration, 0)
         self.h2o_concentration = max(self.h2o_concentration, 0)
     
+    def _update_day_night_cycle(self):
+        """
+        낮/밤 사이클 업데이트
+        50스텝마다 낮과 밤이 전환됨
+        """
+        self.day_night_timer += 1
+        
+        # 주기가 지나면 낮/밤 전환
+        if self.day_night_timer >= DAY_NIGHT_CYCLE_DURATION:
+            self.is_daytime = not self.is_daytime
+            self.day_night_timer = 0
+    
+    def _get_effective_solar_luminosity(self):
+        """
+        현재 낮/밤 상태에 따른 유효 태양 광도 계산
+        
+        Returns:
+            유효 태양 광도
+        """
+        if self.is_daytime:
+            return self.solar_luminosity
+        else:
+            # 밤에는 태양 광도가 크게 감소
+            return self.solar_luminosity * NIGHT_SOLAR_REDUCTION
+    
     def step(self):
         """시뮬레이션 한 스텝 실행"""
         # 무한 시뮬레이션 (시간 제한 없음)
+        
+        # 낮/밤 사이클 업데이트
+        self._update_day_night_cycle()
         
         # 온실 기체 농도 업데이트
         self._update_greenhouse_gases()
@@ -184,6 +209,9 @@ class DaisyworldSimulator:
         # 태양 광도 계산
         self.solar_luminosity = INITIAL_SOLAR_LUMINOSITY + (SOLAR_LUMINOSITY_INCREASE_RATE * self.current_time)
         
+        # 유효 태양 광도 (낮/밤 고려)
+        effective_solar_luminosity = self._get_effective_solar_luminosity()
+        
         # 빈 땅 면적 계산
         self.area_bare_ground = 1 - self.area_black_daisy - self.area_white_daisy
         
@@ -193,16 +221,16 @@ class DaisyworldSimulator:
         if self.area_white_daisy < MIN_AREA_THRESHOLD:
             self.area_white_daisy = MIN_AREA_THRESHOLD
         
-        # 행성 평균 알베도 계산
+        # 행성 평균 알베도 계산 (가중 평균)
         self.planetary_albedo = (
             (self.area_bare_ground * ALBEDO_BARE_GROUND) +
             (self.area_black_daisy * ALBEDO_BLACK_DAISY) +
             (self.area_white_daisy * ALBEDO_WHITE_DAISY)
         )
         
-        # 행성 전체 온도 계산 (온실효과가 반영된 방출 효율 사용)
+        # 행성 전체 온도 계산 (온실효과와 낮/밤이 반영된 방출 효율 사용)
         self.temperature_planet = (
-            self.solar_luminosity * (1 - self.planetary_albedo) / 
+            effective_solar_luminosity * (1 - self.planetary_albedo) / 
             (self.earth_emissivity * STEFAN_BOLTZMANN_CONSTANT)
         ) ** 0.25
         
