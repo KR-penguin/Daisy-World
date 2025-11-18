@@ -23,8 +23,8 @@ GROWTH_RATE_COEFFICIENT = 0.003265 # 성장률 계산 계수
 MIN_AREA_THRESHOLD = 0.0001        # 최소 면적 임계값
 
 # 태양 광도 관련
-INITIAL_SOLAR_LUMINOSITY = 550     # 초기 태양 광도
-SOLAR_LUMINOSITY_INCREASE_RATE = 5.5  # 시간당 태양 광도 증가율
+INITIAL_SOLAR_LUMINOSITY = 450     # 초기 태양 광도 (낮춤)
+SOLAR_LUMINOSITY_INCREASE_RATE = 0.0  # 태양 광도 증가율 (0.0 = 고정, 현실적)
 
 # 시뮬레이션 시간
 SIMULATION_TIME_STEPS = None          # 무한 시뮬레이션 (None = 무한)
@@ -32,14 +32,33 @@ SIMULATION_TIME_STEPS = None          # 무한 시뮬레이션 (None = 무한)
 # 시각화 설정
 NUM_DAISIES = 300                  # 화면에 표시할 데이지 개수
 
+# 지형 관련 상수
+OCEAN_RATIO = 0.7                  # 바다 비율 (지구는 약 71%)
+LAND_RATIO = 0.3                   # 대륙 비율 (지구는 약 29%)
+
+# 열용량 관련 상수 (현실적인 값)
+ATMOSPHERE_HEAT_CAPACITY = 0.88    # 대기 열용량 (온도 변화 완만)
+OCEAN_HEAT_CAPACITY = 0.96         # 바다 열용량 (매우 느리게 변화, 거대한 열 저장소)
+LAND_HEAT_CAPACITY = 0.90          # 대륙 열용량 (느린 변화)
+
+# 알베도 - 지형별
+ALBEDO_OCEAN = 0.06                # 바다 알베도 (매우 낮음, 열 잘 흡수)
+ALBEDO_LAND = 0.3                  # 대륙 알베도 (중간)
+
 # 대기 및 온실효과 관련 상수
 BASE_EARTH_EMISSIVITY = 1.0           # 기본 지구 복사 방출 효율 (온실효과 없을 때)
-GREENHOUSE_EFFECT_COEFFICIENT = 0.3   # 온실효과 계수 (방출 효율 감소율)
+GREENHOUSE_EFFECT_COEFFICIENT = 0.38  # 온실효과 계수 (방출 효율 감소율, 균형 조정)
 
 # 온실 기체 초기 농도 (ppm - parts per million)
 INITIAL_CO2_CONCENTRATION = 400.0     # 초기 CO2 농도 (ppm)
+INITIAL_O2_CONCENTRATION = 210000.0   # 초기 O2 농도 (ppm, ~21%)
 INITIAL_CH4_CONCENTRATION = 1.8       # 초기 CH4 농도 (ppm)
 INITIAL_H2O_CONCENTRATION = 10000.0   # 초기 H2O 농도 (ppm, ~1%)
+
+# 광합성 및 호흡 상수
+RESPIRATION_RATE = 0.5                # 호흡률 (일정하게 유지)
+BASE_PHOTOSYNTHESIS_RATE = 1.2        # 기본 광합성률 (호흡보다 큼)
+PHOTOSYNTHESIS_TEMP_COEFFICIENT = 0.005  # 온도에 따른 광합성 효율 증가
 
 # 온실 기체별 온실효과 기여도 (상대적 강도)
 CO2_GREENHOUSE_FACTOR = 1.0           # CO2 기준 (1배)
@@ -48,9 +67,22 @@ H2O_GREENHOUSE_FACTOR = 0.1           # H2O는 농도가 높지만 효과는 약
 
 
 # 낮/밤 사이클 설정
-DAY_NIGHT_CYCLE_DURATION = 50         # 낮/밤 전환 주기 (스텝 단위)
-NIGHT_SOLAR_REDUCTION = 0.0           # 밤에 태양 광도 감소율 (0 = 완전 차단)
-TRANSITION_SMOOTHNESS = 0.1           # 낮/밤 전환 부드러움 (0.1 = 10스텝에 걸쳐 전환)
+DAY_NIGHT_CYCLE_DURATION = 150        # 낮/밤 전환 주기 (스텝 단위) - 더 긴 주기로 안정화
+NIGHT_SOLAR_REDUCTION = 0.42          # 밤에 태양 광도 감소율 (42% 유지)
+TRANSITION_SMOOTHNESS = 0.08          # 낮/밤 전환 부드러움 (더 부드럽게)
+
+# 밀란코비치 주기 설정 (현실적인 천문학적 주기)
+# 실제 주기를 1000배 축소하여 시뮬레이션에서 관찰 가능하게 조정
+ECCENTRICITY_CYCLE = 10000            # 이심률 변화 주기 (실제: ~100,000년)
+PRECESSION_CYCLE = 2600               # 세차운동 주기 (실제: ~26,000년)
+OBLIQUITY_CYCLE = 4100                # 자전축 기울기 변화 주기 (실제: ~41,000년)
+
+# 밀란코비치 변화 범위
+ECCENTRICITY_MIN = 0.0                # 최소 이심률 (원형 궤도)
+ECCENTRICITY_MAX = 0.06               # 최대 이심률 (실제 지구: 0~0.06)
+OBLIQUITY_MIN = 22.1                  # 최소 기울기 (도)
+OBLIQUITY_MAX = 24.5                  # 최대 기울기 (도) (실제 지구: 22.1~24.5도)
+CURRENT_OBLIQUITY = 23.5              # 현재 기울기 (도)
 
 class DaisyworldSimulator:
     """데이지 월드 시뮬레이션 클래스"""
@@ -71,6 +103,9 @@ class DaisyworldSimulator:
         
         # 온도 변수
         self.temperature_planet = 0.0       # 행성 전체 온도
+        self.temperature_atmosphere = 0.0   # 대기 온도
+        self.temperature_ocean = 0.0        # 바다 온도
+        self.temperature_land = 0.0         # 대륙 온도
         self.temperature_black_daisy = 0.0  # 검은 데이지 영역 온도
         self.temperature_white_daisy = 0.0  # 흰 데이지 영역 온도
         
@@ -79,12 +114,13 @@ class DaisyworldSimulator:
         self.growth_factor_white = 0.0  # 흰 데이지 성장률
         
         # 기타 변수
-        self.solar_luminosity = 0.0    # 현재 태양 광도
+        self.solar_luminosity = INITIAL_SOLAR_LUMINOSITY  # 현재 태양 광도 (고정)
         self.planetary_albedo = 0.0    # 행성 평균 알베도
         self.current_time = 0
         
         # 대기 및 온실효과 변수
         self.co2_concentration = INITIAL_CO2_CONCENTRATION    # CO2 농도 (ppm)
+        self.o2_concentration = INITIAL_O2_CONCENTRATION      # O2 농도 (ppm)
         self.ch4_concentration = INITIAL_CH4_CONCENTRATION    # CH4 농도 (ppm)
         self.h2o_concentration = INITIAL_H2O_CONCENTRATION    # H2O 농도 (ppm)
         self.greenhouse_effect = 0.0                          # 총 온실효과
@@ -95,12 +131,21 @@ class DaisyworldSimulator:
         self.day_night_timer = 0                              # 낮/밤 전환 타이머
         self.solar_intensity = 1.0                            # 현재 태양 강도 (0.0 ~ 1.0, 점진적 변화)
         
+        # 밀란코비치 주기 변수
+        self.eccentricity = 0.0167                            # 현재 이심률 (지구 현재값)
+        self.obliquity = CURRENT_OBLIQUITY                    # 현재 자전축 기울기 (도)
+        self.precession_angle = 0.0                           # 세차운동 각도 (도)
+        
         # 데이터 기록용 리스트
         self.history_black_daisy = []
         self.history_white_daisy = []
         self.history_temperature = []
+        self.history_atmosphere_temp = []
+        self.history_ocean_temp = []
+        self.history_land_temp = []
         self.history_time = []
         self.history_co2 = []
+        self.history_o2 = []
         self.history_ch4 = []
         self.history_h2o = []
         self.history_greenhouse_effect = []
@@ -112,6 +157,8 @@ class DaisyworldSimulator:
         self.center_y = center_y
         self.daisy_positions = self._generate_daisy_positions()
     
+        self.solar_luminosity = INITIAL_SOLAR_LUMINOSITY
+
     def _generate_daisy_positions(self):
         """데이지들의 랜덤 위치 생성 (픽셀 좌표)"""
         positions = []
@@ -159,18 +206,169 @@ class DaisyworldSimulator:
     def _update_greenhouse_gases(self):
         """
         시간에 따른 온실 기체 농도 업데이트
+        광합성과 호흡을 통한 CO2/O2 순환 포함
         """
+        total_daisy_area = self.area_black_daisy + self.area_white_daisy
         
+        # === 광합성 및 호흡 시스템 ===
+        # 호흡: 항상 일정하게 발생 (O2 소비, CO2 생성)
+        respiration_co2 = total_daisy_area * RESPIRATION_RATE
+        respiration_o2 = -total_daisy_area * RESPIRATION_RATE  # O2 소비 (음수)
         
-        # 농도가 음수가 되지 않도록
-        self.co2_concentration = max(self.co2_concentration, 0)
-        self.ch4_concentration = max(self.ch4_concentration, 0)
-        self.h2o_concentration = max(self.h2o_concentration, 0)
+        # 광합성: 낮에만 발생 (CO2 소비, O2 생성)
+        # 온도가 높을수록 광합성 효율 증가
+        if self.is_daytime:
+            temp_celsius = self.temperature_planet - 273.15
+            temp_boost = 1.0 + (temp_celsius * PHOTOSYNTHESIS_TEMP_COEFFICIENT)  # 온도에 따른 효율 증가
+            temp_boost = max(0.5, min(temp_boost, 2.0))  # 0.5~2.0 범위로 제한
+            
+            photosynthesis_rate = BASE_PHOTOSYNTHESIS_RATE * temp_boost * self.solar_intensity
+            photosynthesis_co2 = -total_daisy_area * photosynthesis_rate  # CO2 소비 (음수)
+            photosynthesis_o2 = total_daisy_area * photosynthesis_rate    # O2 생성 (양수)
+        else:
+            # 밤: 광합성 없음
+            photosynthesis_co2 = 0.0
+            photosynthesis_o2 = 0.0
+        
+        # 순 변화량 계산
+        # 낮: 광합성 > 호흡 → 순 O2 생성, CO2 소비
+        # 밤: 호흡만 → O2 소비, CO2 생성 (낮의 축적량보다 적음)
+        net_co2_change = respiration_co2 + photosynthesis_co2
+        net_o2_change = respiration_o2 + photosynthesis_o2
+        
+        self.co2_concentration += net_co2_change
+        self.o2_concentration += net_o2_change
+        
+        # CH4: 습지(바다 근처)와 생물 활동에 따라 변화
+        ch4_production = total_daisy_area * 0.001  # 생물 활동
+        ch4_decay = self.ch4_concentration * 0.001  # 자연 분해
+        self.ch4_concentration += ch4_production - ch4_decay
+        
+        # H2O: 온도와 바다 면적에 따라 증발/응결
+        temp_factor = (self.temperature_ocean - 273.15) / 100.0  # 섭씨 기준
+        evaporation = max(0, temp_factor * 30.0)  # 증발 속도 감소 (50.0 → 30.0)
+        condensation = self.h2o_concentration * 0.002  # 응결 속도 증가 (0.001 → 0.002)
+        self.h2o_concentration += evaporation - condensation
+        
+        # 농도 상한선 및 하한선 설정 (폭주 방지)
+        self.co2_concentration = max(50.0, min(self.co2_concentration, 800.0))  # 50~800 ppm
+        self.o2_concentration = max(100000.0, min(self.o2_concentration, 300000.0))  # 100000~300000 ppm (10~30%)
+        self.ch4_concentration = max(0.5, min(self.ch4_concentration, 5.0))     # 0.5~5 ppm
+        self.h2o_concentration = max(1000.0, min(self.h2o_concentration, 25000.0))  # 1000~25000 ppm
+    
+    def _calculate_terrain_temperatures(self, effective_solar_luminosity):
+        """
+        지형별 온도 계산 (열용량 고려)
+        
+        Args:
+            effective_solar_luminosity: 유효 태양 광도
+        """
+        # 지형별 기본 온도 계산 (열용량 없이)
+        base_temp_ocean = (
+            effective_solar_luminosity * (1 - ALBEDO_OCEAN) /
+            (self.earth_emissivity * STEFAN_BOLTZMANN_CONSTANT)
+        ) ** 0.25
+        
+        base_temp_land = (
+            effective_solar_luminosity * (1 - ALBEDO_LAND) /
+            (self.earth_emissivity * STEFAN_BOLTZMANN_CONSTANT)
+        ) ** 0.25
+        
+        # 대기 온도는 해양과 육지의 가중 평균
+        base_temp_atmosphere = (
+            base_temp_ocean * OCEAN_RATIO +
+            base_temp_land * LAND_RATIO
+        )
+        
+        # 열용량 적용 (이전 온도와 새 온도의 가중 평균)
+        # 열용량이 클수록 이전 온도를 더 많이 유지
+        self.temperature_atmosphere = (
+            self.temperature_atmosphere * ATMOSPHERE_HEAT_CAPACITY +
+            base_temp_atmosphere * (1 - ATMOSPHERE_HEAT_CAPACITY)
+        )
+        
+        self.temperature_ocean = (
+            self.temperature_ocean * OCEAN_HEAT_CAPACITY +
+            base_temp_ocean * (1 - OCEAN_HEAT_CAPACITY)
+        )
+        
+        self.temperature_land = (
+            self.temperature_land * LAND_HEAT_CAPACITY +
+            base_temp_land * (1 - LAND_HEAT_CAPACITY)
+        )
+        
+        # 행성 전체 온도는 각 지형의 가중 평균
+        self.temperature_planet = (
+            self.temperature_atmosphere * 0.3 +  # 대기 영향 30%
+            self.temperature_ocean * OCEAN_RATIO * 0.7 +  # 바다 영향
+            self.temperature_land * LAND_RATIO * 0.7      # 대륙 영향
+        )
+    
+    def _update_milankovitch_cycles(self):
+        """
+        밀란코비치 주기 업데이트
+        - 이심률 (Eccentricity): 궤도의 타원 정도
+        - 자전축 기울기 (Obliquity): 자전축 기울기 변화
+        - 세차운동 (Precession): 자전축의 회전
+        """
+        # 1. 이심률 변화 (100,000년 주기)
+        eccentricity_phase = (2 * np.pi * self.current_time) / ECCENTRICITY_CYCLE
+        self.eccentricity = ECCENTRICITY_MIN + (ECCENTRICITY_MAX - ECCENTRICITY_MIN) * \
+                           (0.5 + 0.5 * np.sin(eccentricity_phase))
+        
+        # 2. 자전축 기울기 변화 (41,000년 주기)
+        obliquity_phase = (2 * np.pi * self.current_time) / OBLIQUITY_CYCLE
+        self.obliquity = OBLIQUITY_MIN + (OBLIQUITY_MAX - OBLIQUITY_MIN) * \
+                        (0.5 + 0.5 * np.sin(obliquity_phase))
+        
+        # 3. 세차운동 (26,000년 주기)
+        precession_phase = (2 * np.pi * self.current_time) / PRECESSION_CYCLE
+        self.precession_angle = precession_phase * (180 / np.pi)  # 라디안을 도로 변환
+    
+    def _calculate_solar_distance_factor(self):
+        """
+        이심률과 세차운동에 따른 태양-지구 거리 계수 계산
+        거리가 가까우면 태양 복사 에너지 증가
+        
+        Returns:
+            태양 복사 에너지 변화 계수 (1.0 기준)
+        """
+        # 궤도 상 위치 (세차운동 고려)
+        orbital_angle = self.precession_angle + (self.day_night_timer / DAY_NIGHT_CYCLE_DURATION) * 360
+        orbital_angle_rad = orbital_angle * (np.pi / 180)
+        
+        # 타원 궤도에서의 거리 변화
+        # r = a(1-e^2)/(1+e*cos(θ))
+        distance_factor = (1 - self.eccentricity**2) / (1 + self.eccentricity * np.cos(orbital_angle_rad))
+        
+        # 거리의 제곱에 반비례 (1/r^2 법칙)
+        solar_factor = 1.0 / (distance_factor ** 2)
+        
+        return solar_factor
+    
+    def _calculate_seasonal_factor(self):
+        """
+        자전축 기울기에 따른 계절 변화 계산
+        기울기가 클수록 계절 변화 심함
+        
+        Returns:
+            계절 효과 계수 (0.8 ~ 1.2)
+        """
+        # 태양에 대한 지구 기울기 효과
+        obliquity_rad = self.obliquity * (np.pi / 180)
+        
+        # 낮/밤 사이클 위치에 따른 계절 (여름/겪울)
+        seasonal_phase = (self.day_night_timer / DAY_NIGHT_CYCLE_DURATION) * 2 * np.pi
+        
+        # 기울기에 따른 태양 복사 변화
+        seasonal_factor = 1.0 + 0.2 * np.sin(obliquity_rad) * np.cos(seasonal_phase)
+        
+        return seasonal_factor
     
     def _update_day_night_cycle(self):
         """
         낮/밤 사이클 업데이트
-        50스텝마다 낮과 밤이 전환되며, 태양 강도는 점진적으로 변화
+        100스텝마다 낮과 밤이 전환되며, 태양 강도는 점진적으로 변화
         """
         self.day_night_timer += 1
         
@@ -193,16 +391,32 @@ class DaisyworldSimulator:
     def _get_effective_solar_luminosity(self):
         """
         현재 낮/밤 상태에 따른 유효 태양 광도 계산
-        태양 강도가 점진적으로 변하므로 온도도 부드럽게 변화
+        밀란코비치 주기 효과 포함:
+        - 이심률: 태양-지구 거리 변화
+        - 자전축 기울기: 계절 변화
+        - 세차운동: 계절과 궤도 위치의 위상 변화
         
         Returns:
             유효 태양 광도
         """
-        return self.solar_luminosity * self.solar_intensity
+        # 기본 태양 광도 (낮/밤 고려)
+        base_luminosity = self.solar_luminosity * self.solar_intensity
+        
+        # 밀란코비치 효과 적용
+        distance_factor = self._calculate_solar_distance_factor()  # 이심률 + 세차운동
+        seasonal_factor = self._calculate_seasonal_factor()        # 자전축 기울기
+        
+        # 최종 태양 광도
+        effective_luminosity = base_luminosity * distance_factor * seasonal_factor
+        
+        return effective_luminosity
     
     def step(self):
         """시뮬레이션 한 스텝 실행"""
         # 무한 시뮬레이션 (시간 제한 없음)
+        
+        # 밀란코비치 주기 업데이트
+        self._update_milankovitch_cycles()
         
         # 낮/밤 사이클 업데이트
         self._update_day_night_cycle()
@@ -216,8 +430,6 @@ class DaisyworldSimulator:
         # 지구 방출 효율 업데이트
         self._update_earth_emissivity()
         
-        # 태양 광도 계산
-        self.solar_luminosity = INITIAL_SOLAR_LUMINOSITY + (SOLAR_LUMINOSITY_INCREASE_RATE * self.current_time)
         
         # 유효 태양 광도 (낮/밤 고려)
         effective_solar_luminosity = self._get_effective_solar_luminosity()
@@ -231,18 +443,22 @@ class DaisyworldSimulator:
         if self.area_white_daisy < MIN_AREA_THRESHOLD:
             self.area_white_daisy = MIN_AREA_THRESHOLD
         
-        # 행성 평균 알베도 계산 (가중 평균)
-        self.planetary_albedo = (
-            (self.area_bare_ground * ALBEDO_BARE_GROUND) +
+        # 행성 평균 알베도 계산 (대륙 부분만 - 데이지 영향)
+        # 대륙에서의 데이지 비율 계산
+        land_albedo = (
+            (self.area_bare_ground * ALBEDO_LAND) +
             (self.area_black_daisy * ALBEDO_BLACK_DAISY) +
             (self.area_white_daisy * ALBEDO_WHITE_DAISY)
         )
         
-        # 행성 전체 온도 계산 (온실효과와 낮/밤이 반영된 방출 효율 사용)
-        self.temperature_planet = (
-            effective_solar_luminosity * (1 - self.planetary_albedo) / 
-            (self.earth_emissivity * STEFAN_BOLTZMANN_CONSTANT)
-        ) ** 0.25
+        # 행성 전체 알베도 (바다 + 대륙)
+        self.planetary_albedo = (
+            ALBEDO_OCEAN * OCEAN_RATIO +
+            land_albedo * LAND_RATIO
+        )
+        
+        # 지형별 온도 계산 (열용량 고려)
+        self._calculate_terrain_temperatures(effective_solar_luminosity)
         
         # 각 데이지 영역의 온도 계산
         self.temperature_white_daisy = TEMPERATURE_FEEDBACK_FACTOR * (self.planetary_albedo - ALBEDO_WHITE_DAISY) + self.temperature_planet
@@ -269,9 +485,13 @@ class DaisyworldSimulator:
         # 데이터 기록
         self.history_time.append(self.current_time)
         self.history_temperature.append(self.temperature_planet)
+        self.history_atmosphere_temp.append(self.temperature_atmosphere)
+        self.history_ocean_temp.append(self.temperature_ocean)
+        self.history_land_temp.append(self.temperature_land)
         self.history_black_daisy.append(self.area_black_daisy)
         self.history_white_daisy.append(self.area_white_daisy)
         self.history_co2.append(self.co2_concentration)
+        self.history_o2.append(self.o2_concentration)
         self.history_ch4.append(self.ch4_concentration)
         self.history_h2o.append(self.h2o_concentration)
         self.history_greenhouse_effect.append(self.greenhouse_effect)
