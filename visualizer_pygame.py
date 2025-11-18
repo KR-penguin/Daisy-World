@@ -130,7 +130,7 @@ def run_pygame_visualization(simulator):
         
         info_lines = [
             f'Time: {simulator.current_time}',
-            f'Day/Night: {"DAY" if simulator.is_daytime else "NIGHT"} ({simulator.day_night_timer}/{150})',
+            f'Day/Night: {"DAY" if simulator.is_daytime else "NIGHT"} ({simulator.day_night_timer}/100)',
             f'Solar Intensity: {simulator.solar_intensity:.2f}',
             f'',
             f'=== Milankovitch Cycles ===',

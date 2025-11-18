@@ -28,6 +28,7 @@ SOLAR_LUMINOSITY_INCREASE_RATE = 0.0  # 태양 광도 증가율 (0.0 = 고정, �
 
 # 시뮬레이션 시간
 SIMULATION_TIME_STEPS = None          # 무한 시뮬레이션 (None = 무한)
+TIME_STEP_SECONDS = 3600              # 1스텝 = 1시간 (3600초)
 
 # 시각화 설정
 NUM_DAISIES = 300                  # 화면에 표시할 데이지 개수
@@ -67,7 +68,7 @@ H2O_GREENHOUSE_FACTOR = 0.1           # H2O는 농도가 높지만 효과는 약
 
 
 # 낮/밤 사이클 설정
-DAY_NIGHT_CYCLE_DURATION = 150        # 낮/밤 전환 주기 (스텝 단위) - 더 긴 주기로 안정화
+DAY_NIGHT_CYCLE_DURATION = 100         # 낮/밤 전환 주기 (스텝 단위) - 24시간 = 1일
 NIGHT_SOLAR_REDUCTION = 0.42          # 밤에 태양 광도 감소율 (42% 유지)
 TRANSITION_SMOOTHNESS = 0.08          # 낮/밤 전환 부드러움 (더 부드럽게)
 
@@ -101,13 +102,13 @@ class DaisyworldSimulator:
         self.area_white_daisy = 0.01  # 흰 데이지가 차지하는 면적
         self.area_bare_ground = 0.0   # 빈 땅의 면적
         
-        # 온도 변수
-        self.temperature_planet = 0.0       # 행성 전체 온도
-        self.temperature_atmosphere = 0.0   # 대기 온도
-        self.temperature_ocean = 0.0        # 바다 온도
-        self.temperature_land = 0.0         # 대륙 온도
-        self.temperature_black_daisy = 0.0  # 검은 데이지 영역 온도
-        self.temperature_white_daisy = 0.0  # 흰 데이지 영역 온도
+        # 온도 변수 (초기값 250K)
+        self.temperature_planet = 250.0       # 행성 전체 온도
+        self.temperature_atmosphere = 250.0   # 대기 온도
+        self.temperature_ocean = 250.0        # 바다 온도
+        self.temperature_land = 250.0         # 대륙 온도
+        self.temperature_black_daisy = 250.0  # 검은 데이지 영역 온도
+        self.temperature_white_daisy = 250.0  # 흰 데이지 영역 온도
         
         # 성장률 변수
         self.growth_factor_black = 0.0  # 검은 데이지 성장률
